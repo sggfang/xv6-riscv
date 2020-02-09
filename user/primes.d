@@ -1,1 +1,1 @@
-user/primes.o: user/primes.c user/user.h kernel/types.h
+user/primes.o: user/primes.c kernel/types.h user/user.h

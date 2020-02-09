@@ -1,2 +1,2 @@
-user/find.o: user/find.c user/user.h kernel/types.h kernel/stat.h \
+user/find.o: user/find.c kernel/types.h kernel/stat.h user/user.h \
  kernel/fs.h

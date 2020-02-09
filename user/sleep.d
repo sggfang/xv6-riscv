@@ -1,1 +1,1 @@
-user/sleep.o: user/sleep.c user/user.h kernel/types.h
+user/sleep.o: user/sleep.c kernel/types.h user/user.h
