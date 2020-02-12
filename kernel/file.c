@@ -16,7 +16,8 @@
 struct devsw devsw[NDEV];
 struct {
   struct spinlock lock;
-  struct file file[NFILE];
+  //struct file file[NFILE];
+  //struct file *file;
 } ftable;
 
 void
@@ -30,18 +31,29 @@ struct file*
 filealloc(void)
 {
   struct file *f;
-
+  
   acquire(&ftable.lock);
-  for(f = ftable.file; f < ftable.file + NFILE; f++){
+  f=bd_malloc(sizeof(struct file));
+  if(f){
+    memset(f,0,sizeof(struct file));
+    f->ref=1;
+    release(&ftable.lock); //has been used
+    return f;
+  }
+  release(&ftable.lock);//release the unused file table
+  return 0;
+}
+
+  /*for(f = ftable.file; f < ftable.file + NFILE; f++){
     if(f->ref == 0){
       f->ref = 1;
       release(&ftable.lock);
       return f;
     }
   }
-  release(&ftable.lock);
-  return 0;
-}
+  release(&ftable.lock);*/
+  //return 0;
+//}
 
 // Increment ref count for file f.
 struct file*
@@ -59,7 +71,7 @@ filedup(struct file *f)
 void
 fileclose(struct file *f)
 {
-  struct file ff;
+  //struct file ff;
 
   acquire(&ftable.lock);
   if(f->ref < 1)
@@ -68,18 +80,19 @@ fileclose(struct file *f)
     release(&ftable.lock);
     return;
   }
-  ff = *f;
+  //ff = *f;
   f->ref = 0;
   f->type = FD_NONE;
   release(&ftable.lock);
 
-  if(ff.type == FD_PIPE){
-    pipeclose(ff.pipe, ff.writable);
-  } else if(ff.type == FD_INODE || ff.type == FD_DEVICE){
-    begin_op(ff.ip->dev);
-    iput(ff.ip);
-    end_op(ff.ip->dev);
+  if(f->type == FD_PIPE){
+    pipeclose(f->pipe, f->writable);
+  } else if(f->type == FD_INODE || f->type == FD_DEVICE){
+    begin_op(f->ip->dev);
+    iput(f->ip);
+    end_op(f->ip->dev);
   }
+  bd_free(f);
 }
 
 // Get metadata about file f.
