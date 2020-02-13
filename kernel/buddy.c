@@ -7,7 +7,7 @@
 
 // Buddy allocator
 
-static int nsizes = 5;  // for debugging
+static int nsizes;//=5;  // for debugging
 
 #define LEAF_SIZE     16 // The smallest allocation size (in bytes)
 #define MAXSIZE       (nsizes-1) // Largest index in bd_sizes array
@@ -63,7 +63,7 @@ void bd_toggle(char *array,int index){
   array[index/8]^=m;
 }
 
-void
+/*void
 bd_print() {
   for (int k = 0; k < nsizes; k++) {
     printf("size %d (%d):", k, BLK_SIZE(k));
@@ -81,7 +81,7 @@ bd_print() {
       printf("\n");
     }
   }
-}
+}*/
 
 int bit_get(char *array,int index){
   index>>=1;
@@ -136,12 +136,12 @@ bd_malloc(uint64 nbytes)
   // Found one; pop it and potentially split it.
   char *p = lst_pop(&bd_sizes[k].free);
   //bit_set(bd_sizes[k].alloc, blk_index(k, p));
-  bit_toggle(bd_sizes[k].alloc,blk_index(k,p));
+  bd_toggle(bd_sizes[k].alloc,blk_index(k,p));
   for(; k > fk; k--) {
     char *q = p + BLK_SIZE(k-1);
     bit_set(bd_sizes[k].split, blk_index(k, p));
     //bit_set(bd_sizes[k-1].alloc, blk_index(k-1, p));
-    bit_toggle(bd_sizes[k-1].alloc,blk_index(k-1,p));
+    bd_toggle(bd_sizes[k-1].alloc,blk_index(k-1,p));
     lst_push(&bd_sizes[k-1].free, q);
   }
   //printf("malloc: %p size class %d\n", p, fk);
@@ -169,7 +169,7 @@ bd_free(void *p) {
   for (k = size(p); k < MAXSIZE; k++) {
     int bi = blk_index(k, p);
     int buddy = (bi % 2 == 0) ? bi+1 : bi-1;
-    bit_toggle(bd_sizes[k].alloc,bi);
+    bd_toggle(bd_sizes[k].alloc,bi);
     if(bit_get(bd_sizes[k].alloc,buddy)){
       break;
     }
@@ -210,38 +210,43 @@ log2(uint64 n) {
 
 void bd_mark(void *start,void *stop){
   int bi,bj;
+
   if(((uint64) start%LEAF_SIZE!=0)||((uint64)stop%LEAF_SIZE!=0))
     panic("bd_mark");
+
   for(int k=0;k<nsizes;k++){
     bi=blk_index(k,start);
     bj=blk_index_next(k,stop);
     for(;bi<bj;bi++){
       if(k>0){
-				bit_set(bd_sizes[k].split,bi);
-			}
-			bit_set(bd_sizes[k].alloc,bi);
-			bit_toggle(bd_sizes[k].alloc,bi);
-		}
+	     bit_set(bd_sizes[k].split,bi);
+      }
+      //bit_set(bd_sizes[k].alloc,bi);
+	  bd_toggle(bd_sizes[k].alloc,bi);
 	}
+  }
 }
 
 int bd_initfree_pair(int k,int bi,void *allow_left,void *allow_right){
 	int buddy=(bi%2==0)?bi+1:bi-1;
 	int free=0;
-	if(bit_get(bd_sizes[k].alloc,bi){
+	if(bit_get(bd_sizes[k].alloc,bi)){
 		free=BLK_SIZE(k);
-		if(in_range(allow_left,allow_right,addr(k,buddy)))
+		if(in_range(allow_left,allow_right,addr(k,buddy))){
 			lst_push(&bd_sizes[k].free,addr(k,buddy));
-		else
+		}
+		else{
 			lst_push(&bd_sizes[k].free,addr(k,bi));
+		}
 	}
 	return free;
 }
 
 int bd_initfree(void *bd_left,void *bd_right,void *allow_left,void *allow_right){
 	int free=0;
+
 	for(int k=0;k<MAXSIZE;k++){
-		int left=bit_index_next(k,bd_left);
+		int left=blk_index_next(k,bd_left);
 		int right=blk_index(k,bd_right);
 		free+=bd_initfree_pair(k,left,allow_left,allow_right);
 		if(right<=left){
@@ -288,8 +293,8 @@ bd_init(void *base, void *end) {
 	
 	printf("bd: memory sz is %d bytes, and allocate an size array of length %d\n",(char*)end-p,nsizes);
 	bd_sizes=(Sz_info *)p;
-	p++sizeof(Sz_infor)*nsizes;
-	memset(bd_sizes[k].alloc,0,sz);
+	p+=sizeof(Sz_info)*nsizes;
+	memset(bd_sizes,0,sizeof(Sz_info)*nsizes);
 	
 	for(int k=0;k<nsizes;k++){
 		lst_init(&bd_sizes[k].free);
@@ -298,11 +303,19 @@ bd_init(void *base, void *end) {
 		memset(bd_sizes[k].alloc,0,sz);
 		p+=sz;
 	}
+
+	for (int k=1;k<nsizes;k++){
+		sz=sizeof(char)*(ROUNDUP(NBLK(k),8))/8;
+		bd_sizes[k].split=p;
+		memset(bd_sizes[k].split,0,sz);
+		p+=sz;
+	}
+
 	p=(char *) ROUNDUP((uint64)p,LEAF_SIZE);
 	
-	int meta=bd_mark_data_structure(p);
+	int meta=bd_mark_data_structures(p);
 	int unavailable=bd_mark_unavailable(end,p);
-	void *bd_end=dn_base+BLK_SIZE(MAXSIZE)-unavailable;
+	void *bd_end=bd_base+BLK_SIZE(MAXSIZE)-unavailable;
 	int free=bd_initfree(p,bd_end,p,end);
 	
 	if(free!=BLK_SIZE(MAXSIZE)-meta-unavailable){
