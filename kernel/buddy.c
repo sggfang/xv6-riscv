@@ -38,12 +38,14 @@ static struct spinlock lock;
 
 // Return 1 if bit at position index in array is set to 1
 int bit_isset(char *array, int index) {
-  char b = array[index/8];
+  char b = array[index/8];//1 bit to indicate a value
   char m = (1 << (index % 8));
   return (b & m) == m;
 }
 
 // Set bit at position index in array to 1
+//eg. index==2. b=array[0] and m=100
+// b|m=set the second position to 1
 void bit_set(char *array, int index) {
   char b = array[index/8];
   char m = (1 << (index % 8));
@@ -51,19 +53,24 @@ void bit_set(char *array, int index) {
 }
 
 // Clear bit at position index in array
+//index==2. set the second position to 0
 void bit_clear(char *array, int index) {
   char b = array[index/8];
   char m = (1 << (index % 8));
   array[index/8] = (b & ~m);
 }
 
+//if index==8 -> 4
+//m=10000
+//the fourth position will be set to opposite
+//eg. 10101 --> 00101
 void bd_toggle(char *array,int index){
   index>>=1;
   char m=(1<<(index%8));
   array[index/8]^=m;
 }
 
-/*void
+void
 bd_print() {
   for (int k = 0; k < nsizes; k++) {
     printf("size %d (%d):", k, BLK_SIZE(k));
@@ -81,7 +88,7 @@ bd_print() {
       printf("\n");
     }
   }
-}*/
+}
 
 int bit_get(char *array,int index){
   index>>=1;
@@ -190,6 +197,7 @@ bd_free(void *p) {
   release(&lock);
 }
 
+//get the index for the next block
 int
 blk_index_next(int k, char *p) {
   int n = (p - (char *) bd_base) / BLK_SIZE(k);
@@ -198,6 +206,7 @@ blk_index_next(int k, char *p) {
   return n ;
 }
 
+//get the #of bits
 int
 log2(uint64 n) {
   int k = 0;
@@ -223,7 +232,7 @@ void bd_mark(void *start,void *stop){
       }
       //bit_set(bd_sizes[k].alloc,bi);
 	  bd_toggle(bd_sizes[k].alloc,bi);
-	}
+    }
   }
 }
 
@@ -280,7 +289,7 @@ bd_init(void *base, void *end) {
 	char *p=(char *)ROUNDUP((uint64)base,LEAF_SIZE);
 	int sz;
 	
-  initlock(&lock, "buddy");
+ 	initlock(&lock, "buddy");
 	
   // YOUR CODE HERE TO INITIALIZE THE BUDDY ALLOCATOR.  FEEL FREE TO
   // BORROW CODE FROM bd_init() in the lecture notes.
@@ -292,18 +301,21 @@ bd_init(void *base, void *end) {
 	}
 	
 	printf("bd: memory sz is %d bytes, and allocate an size array of length %d\n",(char*)end-p,nsizes);
+	//allocate bd size array
 	bd_sizes=(Sz_info *)p;
 	p+=sizeof(Sz_info)*nsizes;
 	memset(bd_sizes,0,sizeof(Sz_info)*nsizes);
 	
+	//init the free lst, alloc the value
 	for(int k=0;k<nsizes;k++){
-		lst_init(&bd_sizes[k].free);
-		sz=sizeof(char)* ROUNDUP(NBLK(k),16)/16;
+		lst_init(&bd_sizes[k].free);  //connecting a node with previous and next
+		sz=sizeof(char)* ROUNDUP(NBLK(k),8)/8;
 		bd_sizes[k].alloc=p;
 		memset(bd_sizes[k].alloc,0,sz);
 		p+=sz;
 	}
-
+	
+	//alloc the split array
 	for (int k=1;k<nsizes;k++){
 		sz=sizeof(char)*(ROUNDUP(NBLK(k),8))/8;
 		bd_sizes[k].split=p;
@@ -313,11 +325,15 @@ bd_init(void *base, void *end) {
 
 	p=(char *) ROUNDUP((uint64)p,LEAF_SIZE);
 	
+	//mark [base,p] as allocated, so they will not be allocated again
 	int meta=bd_mark_data_structures(p);
+
+	//mark unavailable memory [end,]HEAP_SIZE] as allocated
 	int unavailable=bd_mark_unavailable(end,p);
+
 	void *bd_end=bd_base+BLK_SIZE(MAXSIZE)-unavailable;
-	int free=bd_initfree(p,bd_end,p,end);
-	
+	int free=bd_initfree(p,bd_end,p,end); //get available space 
+
 	if(free!=BLK_SIZE(MAXSIZE)-meta-unavailable){
 		printf("free %d %d\n",free,BLK_SIZE(MAXSIZE)-meta-unavailable);
 		panic("bd_init: free memory");
