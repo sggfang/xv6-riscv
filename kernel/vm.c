@@ -183,18 +183,22 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 size, int do_free)
   last = PGROUNDDOWN(va + size - 1);
   for(;;){
     if((pte = walk(pagetable, a, 0)) == 0)
-      panic("uvmunmap: walk");
+      //panic("uvmunmap: walk");
+			goto next_page;
     if((*pte & PTE_V) == 0){
-      printf("va=%p pte=%p\n", a, *pte);
-      panic("uvmunmap: not mapped");
+      //printf("va=%p pte=%p\n", a, *pte);
+      //panic("uvmunmap: not mapped");
+			goto next_page;
     }
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
+			//goto next_page;
     if(do_free){
       pa = PTE2PA(*pte);
       kfree((void*)pa);
     }
     *pte = 0;
+next_page:
     if(a == last)
       break;
     a += PGSIZE;
@@ -442,3 +446,71 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     return -1;
   }
 }
+
+void digdown(pagetable_t pagetable,int dep){
+	for(int i = 0; i < 512; i++){
+    pte_t pte = pagetable[i];
+
+		if(pte&PTE_V){
+			for(int j=0;j<dep;j++){
+				printf(" ..");
+		  }
+			printf("%d: pte %p pa %p\n",i,pte,PTE2PA(pte));
+		}
+
+    if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){
+      // this PTE points to a lower-level page table.
+			//printf("..%d: pte %s pa %s\n",i, (pte)>>10, ((pte>>12)<<12)+(((*pagetable)<<44)>>44));
+      uint64 child = PTE2PA(pte);
+			digdown((pagetable_t)child, dep+1);
+      //freewalk((pagetable_t)child);
+			//vmprint((pagetable_t)child);
+      //pagetable[i] = 0;
+    } 
+  }
+}
+
+void vmprint(pagetable_t pagetable){
+	printf("page table %p\n",pagetable);
+
+	digdown(pagetable,1);
+  //kfree((void*)pagetable);
+}
+
+/*
+int uvmchkaddr(pagetable_t pagetable, uint64 addr, uint64 size) {
+  struct proc *p = myproc();
+  char *mem;
+  pte_t *pte;
+  uint64 a, end;
+
+  if(p->pid > 1) {
+    if(addr >= p->sz) {
+      printf("uvmchkaddr(): page fault: invalid memory access to vaddr %p\n", addr);
+      return -1;
+    }
+
+    if(addr < p->ustack && addr >= p->ustack - PGSIZE) {
+      printf("uvmchkaddr(): page fault: segfault on vaddr %p on stack guard\n", addr);
+      return -1;
+    }
+  }
+
+  a = PGROUNDDOWN(addr);
+  end = PGROUNDUP(a + size);
+  for(; a < end; a += PGSIZE) {
+    if((pte = walk(pagetable, a, 1)) != 0 && (*pte & PTE_V))
+      continue;
+
+    mem = kalloc();
+    if(mem == 0)
+      return -1;
+    memset(mem, 0, PGSIZE);
+    if(mappages(pagetable, a, PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
+      kfree(mem);
+      return -1;
+    }
+  }
+
+  return 0;
+}*/

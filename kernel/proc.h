@@ -95,6 +95,7 @@ struct proc {
   int pid;                     // Process ID
 
   // these are private to the process, so p->lock need not be held.
+  uint64 ustack;		//Bottom of user stack for this process
   uint64 kstack;               // Bottom of kernel stack for this process
   uint64 sz;                   // Size of process memory (bytes)
   pagetable_t pagetable;       // Page table
@@ -103,4 +104,6 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  
 };

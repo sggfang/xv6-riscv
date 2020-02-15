@@ -32,6 +32,7 @@ kinit()
   bd_init(p, p+MAXHEAP);
 }
 
+//add memory to the free list via per-page calls to kfree
 void
 freerange(void *pa_start, void *pa_end)
 {
