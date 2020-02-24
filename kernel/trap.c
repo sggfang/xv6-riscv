@@ -78,9 +78,14 @@ usertrap(void)
 		uint64 faddr=(uint64)r_stval();
 		uint64 base=PGROUNDDOWN(faddr);
 
-		if(faddr>=p->sz||faddr<p->ustack){
+		if(faddr>=p->sz){
 			printf("out of page boundary\n");
-			p->killed=0;
+			p->killed=1;
+			goto end;
+		}
+		
+		if(faddr<p->ustack){
+			p->killed=1;
 			goto end;
 		}
   	
